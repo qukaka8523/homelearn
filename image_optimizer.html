@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>이미지 최적화 에이전트</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0efe9; color: #1a1a1a; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 2rem 1rem; }
+
+  .card { background: #fff; border-radius: 16px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); padding: 2rem; width: 100%; max-width: 780px; }
+
+  .card-header { margin-bottom: 1.5rem; }
+  .card-title { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .card-title h1 { font-size: 20px; font-weight: 700; }
+  .badge-local { font-size: 11px; font-weight: 600; background: #e8f5e2; color: #3B6D11; border-radius: 6px; padding: 3px 8px; }
+  .card-desc { font-size: 13px; color: #666; line-height: 1.6; }
+
+  .drop-zone { border: 1.5px dashed #c8c6be; border-radius: 12px; padding: 2.5rem 1.5rem; text-align: center; cursor: pointer; transition: background 0.15s, border-color 0.15s; background: #f7f6f2; position: relative; margin-bottom: 1rem; }
+  .drop-zone.drag-over { border-color: #7F77DD; background: #EEEDFE; }
+  .drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-icon { font-size: 36px; margin-bottom: 10px; }
+  .drop-title { font-size: 15px; font-weight: 500; }
+  .drop-sub { font-size: 13px; color: #999; margin-top: 4px; }
+
+  .section { background: #f7f6f2; border-radius: 10px; padding: 14px 16px; margin-bottom: 1rem; }
+  .section-title { font-size: 12px; font-weight: 600; color: #888; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .controls { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; }
+  .ctrl-group { display: flex; flex-direction: column; gap: 5px; }
+  .ctrl-label { font-size: 12px; color: #888; }
+  .ctrl-group select { border: 0.5px solid #ddd; border-radius: 6px; padding: 6px 8px; font-size: 13px; background: #fff; cursor: pointer; width: 100%; }
+  .qual-row { display: flex; justify-content: space-between; }
+  .qual-val { font-size: 12px; font-weight: 600; color: #534AB7; }
+  .ctrl-group input[type=range] { accent-color: #534AB7; width: 100%; margin-top: 2px; }
+
+  .images-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 1rem; }
+  .img-card { background: #f7f6f2; border: 0.5px solid #e0ddd6; border-radius: 10px; overflow: hidden; }
+  .img-preview { width: 100%; height: 110px; object-fit: cover; display: block; background: #eee; }
+  .img-info { padding: 8px 10px; }
+  .img-name { font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .img-size { font-size: 11px; color: #999; margin-top: 1px; }
+  .img-status { margin-top: 5px; }
+  .badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; padding: 2px 7px; border-radius: 999px; }
+  .badge-wait { background: #F1EFE8; color: #5F5E5A; }
+  .badge-proc { background: #EEEDFE; color: #534AB7; }
+  .badge-done { background: #EAF3DE; color: #3B6D11; }
+  .badge-err  { background: #FCEBEB; color: #A32D2D; }
+  .saving-pct { font-size: 11px; font-weight: 600; color: #3B6D11; margin-top: 3px; }
+  .dl-btn { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; padding: 6px; font-size: 11px; font-weight: 600; border: none; background: #534AB7; color: #fff; cursor: pointer; transition: opacity 0.15s; }
+  .dl-btn:hover { opacity: 0.85; }
+
+  .summary-bar { display: flex; gap: 10px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .stat { flex: 1; min-width: 110px; background: #f7f6f2; border-radius: 8px; padding: 10px 12px; }
+  .stat-label { font-size: 11px; color: #999; }
+  .stat-val { font-size: 18px; font-weight: 600; margin-top: 2px; }
+  .stat-val.green { color: #3B6D11; }
+
+  .ai-section { background: #f7f6f2; border-radius: 10px; padding: 14px 16px; margin-bottom: 1rem; }
+  .ai-header { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .ai-body { font-size: 13px; color: #555; line-height: 1.6; }
+  .thinking { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #aaa; }
+  .dot span { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #7F77DD; margin: 0 1.5px; animation: pulse 1.2s infinite; }
+  .dot span:nth-child(2) { animation-delay: 0.2s; }
+  .dot span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes pulse { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
+
+  .btn-row { display: flex; gap: 10px; }
+  .btn-run { flex: 1; padding: 11px; font-size: 14px; font-weight: 600; background: #3d3580; color: #fff; border: none; border-radius: 8px; cursor: pointer; transition: opacity 0.15s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .btn-run:hover { opacity: 0.88; }
+  .btn-run:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-zip { flex: 1; padding: 11px; font-size: 14px; font-weight: 600; background: #fff; color: #3B6D11; border: 1px solid #92c060; border-radius: 8px; cursor: pointer; transition: background 0.15s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .btn-zip:hover:not(:disabled) { background: #EAF3DE; }
+  .btn-zip:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .zip-prog-wrap { margin-top: 8px; display: none; }
+  .zip-prog-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .zip-prog-bar { background: #e8e6df; border-radius: 999px; height: 4px; overflow: hidden; }
+  .zip-prog-fill { height: 100%; width: 0%; background: #639922; border-radius: 999px; transition: width 0.1s; }
+
+  @media (max-width: 520px) {
+    .controls { grid-template-columns: 1fr 1fr; }
+    .btn-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="card">
+
+  <div class="card-header">
+    <div class="card-title">
+      <h1>🖼️ 이미지 최적화 에이전트</h1>
+      <span class="badge-local">로컬 처리</span>
+      <button id="resetBtn" style="margin-left:auto;padding:5px 12px;font-size:12px;font-weight:600;background:#fff;color:#888;border:0.5px solid #ccc;border-radius:6px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='#fff'">↺ 초기화</button>
+    </div>
+    <p class="card-desc">이미지를 업로드하면 브라우저에서 직접 압축·변환합니다. 파일이 서버로 전송되지 않아요.</p>
+  </div>
+
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept="image/*" multiple />
+    <div class="drop-icon">🖼️</div>
+    <div class="drop-title">이미지를 클릭하거나 드래그해서 업로드</div>
+    <div class="drop-sub">여러 파일 동시 선택 가능 · JPG, PNG, WebP, GIF 등</div>
+  </div>
+
+      <div id="imagesGrid" class="images-grid" style="display:none"></div>
+
+  <div class="section" id="settingsSection">
+    <div class="section-title">최적화 설정</div>
+    <div class="controls">
+      <div class="ctrl-group">
+        <div class="ctrl-label">출력 포맷</div>
+        <select id="fmtSelect">
+          <option value="jpeg" selected>JPEG</option>
+          <option value="png">PNG</option>
+        </select>
+      </div>
+      <div class="ctrl-group">
+        <div class="qual-row">
+          <div class="ctrl-label">품질</div>
+          <div class="qual-val" id="qualVal">50</div>
+        </div>
+        <input type="range" min="10" max="100" value="50" id="qualSlider" step="1" />
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label">최대 가로 px</div>
+        <select id="widthSelect">
+          <option value="0">원본 유지</option>
+          <option value="1920">1920px</option>
+          <option value="1280">1280px</option>
+          <option value="800">800px</option>
+          <option value="400">400px</option>
+        </select>
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label">AI 분석</div>
+        <select id="aiMode">
+          <option value="smart">스마트 권장</option>
+          <option value="max" selected>최대 압축</option>
+          <option value="quality">화질 우선</option>
+          <option value="off">꺼짐</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="section" id="resizeSection" style="margin-bottom:1rem;">
+    <div class="section-title">해상도 축소</div>
+    <div id="origSizeInfo" style="display:none;margin-bottom:10px;"><div style="font-size:12px;color:#888;margin-bottom:6px;">업로드된 이미지 크기</div><div id="origSizeList" style="display:flex;flex-wrap:wrap;gap:6px;"></div></div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+        <input type="checkbox" id="resizeEnable" style="accent-color:#534AB7;width:15px;height:15px;" />
+        해상도 줄이기
+      </label>
+      <div id="resizeOptions" style="display:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <label style="font-size:12px;color:#888;">가로</label>
+          <input type="number" id="resizeW" placeholder="예: 1280" min="1" style="width:90px;border:0.5px solid #ddd;border-radius:6px;padding:5px 8px;font-size:13px;" />
+          <span style="font-size:12px;color:#aaa;">px</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <label style="font-size:12px;color:#888;">세로</label>
+          <input type="number" id="resizeH" placeholder="예: 720" min="1" style="width:90px;border:0.5px solid #ddd;border-radius:6px;padding:5px 8px;font-size:13px;" />
+          <span style="font-size:12px;color:#aaa;">px</span>
+        </div>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#555;cursor:pointer;">
+          <input type="checkbox" id="keepRatio" checked style="accent-color:#534AB7;" />
+          비율 유지
+        </label>
+        <div style="font-size:11px;color:#999;" id="resizePreview"></div>
+      </div>
+    </div>
+  </div>
+
+
+
+
+  <div id="summaryBar" class="summary-bar" style="display:none">
+    <div class="stat"><div class="stat-label">원본 총 용량</div><div class="stat-val" id="origTotal">—</div></div>
+    <div class="stat"><div class="stat-label">최적화 후 용량</div><div class="stat-val" id="optTotal">—</div></div>
+    <div class="stat"><div class="stat-label">절감률</div><div class="stat-val green" id="savingPct">—</div></div>
+    <div class="stat"><div class="stat-label">처리 이미지</div><div class="stat-val" id="imgCount">—</div></div>
+  </div>
+
+  <div id="aiCard" class="ai-section" style="display:none">
+    <div class="ai-header">✨ AI 분석 결과</div>
+    <div class="ai-body" id="aiBody"></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-run" id="runBtn" disabled>⚡ 일괄 최적화</button>
+    <button class="btn-zip" id="zipBtn" disabled>🗜️ ZIP 다운로드</button>
+  </div>
+  <div class="zip-prog-wrap" id="zipProgWrap">
+    <div class="zip-prog-label" id="zipProgLabel">ZIP 생성 중...</div>
+    <div class="zip-prog-bar"><div class="zip-prog-fill" id="zipProgFill"></div></div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const fileInput = document.getElementById('fileInput');
+const dropZone = document.getElementById('dropZone');
+const runBtn = document.getElementById('runBtn');
+const zipBtn = document.getElementById('zipBtn');
+const imagesGrid = document.getElementById('imagesGrid');
+const summaryBar = document.getElementById('summaryBar');
+const aiCard = document.getElementById('aiCard');
+const aiBody = document.getElementById('aiBody');
+const qualSlider = document.getElementById('qualSlider');
+const qualVal = document.getElementById('qualVal');
+const zipProgWrap = document.getElementById('zipProgWrap');
+const zipProgFill = document.getElementById('zipProgFill');
+const zipProgLabel = document.getElementById('zipProgLabel');
+
+let items = [];
+
+qualSlider.addEventListener('input', () => { qualVal.textContent = qualSlider.value; });
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  handleFiles([...e.dataTransfer.files].filter(f => f.type.startsWith('image/')));
+});
+fileInput.addEventListener('change', () => { handleFiles([...fileInput.files]); fileInput.value = ''; });
+
+function fmtBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+  return (b / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+// File → base64 dataURL
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// dataURL → 완전히 로드된 Image 객체
+function dataUrlToImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+// 파일 처리: dataURL 변환 → img 로드 → 미리보기+해상도 한 번에
+async function handleFiles(newFiles) {
+  if (!newFiles.length) return;
+  const startIdx = items.length;
+  for (const f of newFiles) {
+    items.push({ file: f, previewDataUrl: null, status: 'loading', outBlob: null, outSize: 0, outDataUrl: null, origW: 0, origH: 0 });
+  }
+  imagesGrid.style.display = 'grid';
+  for (let i = startIdx; i < items.length; i++) imagesGrid.appendChild(makeCard(i));
+  runBtn.disabled = false;
+  zipBtn.disabled = true;
+  summaryBar.style.display = 'none';
+  aiCard.style.display = 'none';
+
+  for (let i = startIdx; i < items.length; i++) {
+    try {
+      const dataUrl = await fileToDataUrl(items[i].file);
+      const img = await dataUrlToImage(dataUrl);
+      items[i].previewDataUrl = dataUrl;
+      items[i].origW = img.naturalWidth;
+      items[i].origH = img.naturalHeight;
+      items[i].status = 'wait';
+    } catch(e) {
+      items[i].status = 'err';
+    }
+    updateCard(i);
+    updateOrigSizeDisplay();
+  }
+}
+
+function updateOrigSizeDisplay() {
+  const loaded = items.filter(it => it.origW);
+  if (!loaded.length) { document.getElementById('origSizeInfo').style.display = 'none'; return; }
+  const groups = {};
+  loaded.forEach(it => {
+    const key = it.origW + ' × ' + it.origH;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(it.file.name);
+  });
+  const list = document.getElementById('origSizeList');
+  list.innerHTML = '';
+  Object.entries(groups).forEach(([size, names]) => {
+    const chip = document.createElement('div');
+    chip.style.cssText = 'background:#eeedfe;border-radius:6px;padding:4px 10px;font-size:12px;cursor:default;white-space:nowrap;';
+    chip.title = names.join('\n');
+    chip.innerHTML = '<span style="font-weight:600;color:#534AB7;">' + size + ' px</span>'
+      + (names.length > 1 ? ' <span style="color:#888;">' + names.length + '장</span>' : '');
+    list.appendChild(chip);
+  });
+  document.getElementById('origSizeInfo').style.display = 'block';
+}
+
+function directDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function makeCard(i) {
+  const item = items[i];
+  const fmt = document.getElementById('fmtSelect').value;
+  const f = item.file;
+  const card = document.createElement('div');
+  card.className = 'img-card'; card.dataset.idx = i;
+
+  const img = document.createElement('img');
+  img.className = 'img-preview';
+  if (item.outDataUrl) img.src = item.outDataUrl;
+  else if (item.previewDataUrl) img.src = item.previewDataUrl;
+  card.appendChild(img);
+
+  const info = document.createElement('div'); info.className = 'img-info';
+  const nameEl = document.createElement('div'); nameEl.className = 'img-name'; nameEl.textContent = f.name;
+  const sizeEl = document.createElement('div'); sizeEl.className = 'img-size'; sizeEl.textContent = fmtBytes(f.size);
+  const statusEl = document.createElement('div'); statusEl.className = 'img-status';
+
+  const badgeMap = { loading: 'badge-wait', wait: 'badge-wait', proc: 'badge-proc', done: 'badge-done', err: 'badge-err' };
+  const labelMap = { loading: '⏳ 로딩', wait: '⏱ 대기', proc: '⚙️ 처리 중', done: '✓ 완료', err: '✕ 오류' };
+  const saving = (item.status === 'done' && item.outSize > 0)
+    ? '<div class="saving-pct">↓ ' + Math.round((1 - item.outSize / f.size) * 100) + '% · ' + fmtBytes(item.outSize) + '</div>' : '';
+  statusEl.innerHTML = '<span class="badge ' + badgeMap[item.status] + '">' + labelMap[item.status] + '</span>' + saving;
+
+  info.appendChild(nameEl); info.appendChild(sizeEl); info.appendChild(statusEl);
+  card.appendChild(info);
+
+  if (item.status === 'done' && item.outBlob) {
+    const dlBtn = document.createElement('button');
+    dlBtn.className = 'dl-btn'; dlBtn.textContent = '⬇ 다운로드';
+    const blob = item.outBlob;
+    const filename = f.name.replace(/\.[^.]+$/, '') + '_opt.' + fmt;
+    dlBtn.onclick = () => directDownload(blob, filename);
+    card.appendChild(dlBtn);
+  }
+  return card;
+}
+
+function updateCard(i) {
+  const existing = imagesGrid.querySelector('[data-idx="' + i + '"]');
+  const newCard = makeCard(i);
+  if (existing) imagesGrid.replaceChild(newCard, existing);
+  else imagesGrid.appendChild(newCard);
+}
+
+async function optimizeImage(item, quality, maxW, fmt) {
+  const dataUrl = await fileToDataUrl(item.file);
+  const img = await dataUrlToImage(dataUrl);
+  let w = img.naturalWidth, h = img.naturalHeight;
+  if (maxW > 0 && w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+
+  const resizeEnable = document.getElementById('resizeEnable').checked;
+  if (resizeEnable) {
+    const rw = parseInt(document.getElementById('resizeW').value) || 0;
+    const rh = parseInt(document.getElementById('resizeH').value) || 0;
+    const keepRatio = document.getElementById('keepRatio').checked;
+    if (keepRatio) {
+      if (rw > 0 && rh <= 0) { h = Math.round(h * rw / w); w = rw; }
+      else if (rh > 0 && rw <= 0) { w = Math.round(w * rh / h); h = rh; }
+      else if (rw > 0 && rh > 0) { const scale = Math.min(rw / w, rh / h); w = Math.round(w * scale); h = Math.round(h * scale); }
+    } else {
+      if (rw > 0) w = rw;
+      if (rh > 0) h = rh;
+    }
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  const mime = fmt === 'png' ? 'image/png' : 'image/jpeg';
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('toBlob 실패')), mime, quality / 100);
+  });
+}
+
+async function runOptimize() {
+  if (!items.length) return;
+  runBtn.disabled = true; zipBtn.disabled = true;
+  const quality = parseInt(qualSlider.value);
+  const maxW = parseInt(document.getElementById('widthSelect').value);
+  const fmt = document.getElementById('fmtSelect').value;
+  const aiMode = document.getElementById('aiMode').value;
+
+  for (let i = 0; i < items.length; i++) {
+    items[i].status = 'proc'; items[i].outBlob = null; items[i].outSize = 0; items[i].outDataUrl = null;
+    updateCard(i);
+    try {
+      let q = quality;
+      if (aiMode === 'max') q = Math.min(quality, 60);
+      else if (aiMode === 'quality') q = Math.max(quality, 85);
+      const blob = await optimizeImage(items[i], q, maxW, fmt);
+      const outDataUrl = await fileToDataUrl(blob);
+      items[i].status = 'done'; items[i].outBlob = blob; items[i].outSize = blob.size; items[i].outDataUrl = outDataUrl;
+    } catch(e) { console.error(e); items[i].status = 'err'; }
+    updateCard(i);
+  }
+
+  const origTotal = items.reduce((s, it) => s + it.file.size, 0);
+  const optTotal = items.reduce((s, it) => s + (it.outSize || 0), 0);
+  const pct = origTotal > 0 ? Math.round((1 - optTotal / origTotal) * 100) : 0;
+  document.getElementById('origTotal').textContent = fmtBytes(origTotal);
+  document.getElementById('optTotal').textContent = fmtBytes(optTotal);
+  document.getElementById('savingPct').textContent = pct + '%';
+  document.getElementById('imgCount').textContent = items.length + '장';
+  summaryBar.style.display = 'flex';
+  if (items.some(it => it.status === 'done')) zipBtn.disabled = false;
+
+  if (aiMode !== 'off') {
+    aiCard.style.display = 'block';
+    aiBody.innerHTML = '<div class="thinking"><div class="dot"><span></span><span></span><span></span></div> 분석 중...</div>';
+    await runAIAnalysis(origTotal, optTotal, pct, fmt, quality, maxW, aiMode);
+  }
+  runBtn.disabled = false;
+  runBtn.textContent = '⚡ 다시 최적화';
+}
+
+async function downloadZip() {
+  const fmt = document.getElementById('fmtSelect').value;
+  const done = items.filter(it => it.status === 'done' && it.outBlob);
+  if (!done.length) return;
+  zipBtn.disabled = true;
+  zipProgWrap.style.display = 'block';
+  zipProgFill.style.width = '0%';
+  zipProgLabel.textContent = 'ZIP 생성 중...';
+  const zip = new JSZip();
+  done.forEach((it, idx) => {
+    zip.file(it.file.name.replace(/\.[^.]+$/, '') + '_opt.' + fmt, it.outBlob);
+    zipProgFill.style.width = Math.round((idx + 1) / done.length * 40) + '%';
+  });
+  zipProgLabel.textContent = '압축 중...';
+  const zipBlob = await zip.generateAsync({ type: 'blob' }, m => {
+    zipProgFill.style.width = Math.round(40 + m.percent * 0.5) + '%';
+  });
+  zipProgFill.style.width = '100%';
+  zipProgLabel.textContent = '다운로드 시작!';
+  directDownload(zipBlob, 'optimized_images.zip');
+  setTimeout(() => { zipProgWrap.style.display = 'none'; zipBtn.disabled = false; }, 1000);
+}
+
+async function runAIAnalysis(origTotal, optTotal, pct, fmt, quality, maxW, mode) {
+  const summary = items.map(it => {
+    const p = it.outSize > 0 ? Math.round((1 - it.outSize / it.file.size) * 100) : 0;
+    return '- ' + it.file.name + ': ' + fmtBytes(it.file.size) + ' → ' + fmtBytes(it.outSize) + ' (' + p + '% 절감, ' + it.status + ')';
+  }).join('\n');
+  const prompt = '이미지 최적화 전문가 AI로서 한국어로 2~3문장 간결하게 분석하세요.\n설정: 포맷=' + fmt + ', 품질=' + quality + ', 최대너비=' + (maxW||'원본') + ', 모드=' + mode + '\n전체: ' + fmtBytes(origTotal) + ' → ' + fmtBytes(optTotal) + ' (' + pct + '% 절감)\n' + summary + '\n결과평가, 개선팁, 추가절감방법. 마크다운 없이 텍스트만.';
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await resp.json();
+    aiBody.textContent = data.content?.map(c => c.text || '').join('') || '분석 불가';
+  } catch(e) { aiBody.textContent = 'AI 분석을 불러올 수 없습니다.'; }
+}
+
+// 해상도 체크박스 토글
+document.getElementById('resizeEnable').addEventListener('change', function() {
+  document.getElementById('resizeOptions').style.display = this.checked ? 'flex' : 'none';
+});
+
+function updateResizePreview() {
+  const keepRatio = document.getElementById('keepRatio').checked;
+  const rw = parseInt(document.getElementById('resizeW').value) || 0;
+  const rh = parseInt(document.getElementById('resizeH').value) || 0;
+  const preview = document.getElementById('resizePreview');
+  if (!keepRatio || (!rw && !rh)) { preview.textContent = ''; return; }
+  if (rw && !rh) preview.textContent = '가로 ' + rw + 'px 기준으로 비율 유지';
+  else if (rh && !rw) preview.textContent = '세로 ' + rh + 'px 기준으로 비율 유지';
+  else if (rw && rh) preview.textContent = rw + '×' + rh + ' 안에 맞게 축소';
+}
+document.getElementById('resizeW').addEventListener('input', updateResizePreview);
+document.getElementById('resizeH').addEventListener('input', updateResizePreview);
+document.getElementById('keepRatio').addEventListener('change', updateResizePreview);
+
+runBtn.addEventListener('click', runOptimize);
+zipBtn.addEventListener('click', downloadZip);
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  items = [];
+  imagesGrid.innerHTML = '';
+  imagesGrid.style.display = 'none';
+  summaryBar.style.display = 'none';
+  aiCard.style.display = 'none';
+  zipProgWrap.style.display = 'none';
+  runBtn.disabled = true;
+  runBtn.textContent = '⚡ 일괄 최적화';
+  zipBtn.disabled = true;
+  qualSlider.value = 50;
+  qualVal.textContent = '50';
+  document.getElementById('fmtSelect').value = 'jpeg';
+  document.getElementById('widthSelect').value = '0';
+  document.getElementById('aiMode').value = 'max';
+  fileInput.value = '';
+  document.getElementById('resizeEnable').checked = false;
+  document.getElementById('resizeOptions').style.display = 'none';
+  document.getElementById('resizeW').value = '';
+  document.getElementById('resizeH').value = '';
+  document.getElementById('keepRatio').checked = true;
+  document.getElementById('resizePreview').textContent = '';
+  document.getElementById('origSizeInfo').style.display = 'none';
+  document.getElementById('origSizeList').innerHTML = '';
+});
+</script>
+</body>
+</html>
